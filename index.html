@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AQI Dashboard — Breathe Smart</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       TOP BAR
+  ═══════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo">
+        <span class="logo-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M21 3C21 3 13 3 8 8C3 13 3 21 3 21C3 21 7 17 12 16C17 15 21 11 21 3Z"
+                  stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M3 21L10 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="logo-text">BreatheSmart</span>
+      </div>
+      <span class="logo-divider"></span>
+      <span class="logo-subtitle">Air Quality Dashboard</span>
+    </div>
+
+    <div class="topbar-center">
+      <div class="search-wrap">
+        <svg class="search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none">
+          <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M16.5 16.5L21 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <input
+          type="text"
+          id="city-search"
+          class="search-input"
+          placeholder="Search city — e.g. Ahmedabad, Delhi, Mumbai..."
+          autocomplete="off"
+        />
+        <button id="search-btn" class="search-btn">Search</button>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <div class="last-updated">
+        <span class="dot-pulse"></span>
+        <span id="update-text">Live data</span>
+      </div>
+      <button class="locate-btn" id="locate-btn" title="Use my location">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M12 2V5M12 19V22M2 12H5M19 12H22"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        My Location
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════
+       MAIN LAYOUT
+  ═══════════════════════════════════════════ -->
+  <main class="main-layout">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="sidebar">
+
+      <!-- City Summary Card -->
+      <div class="card city-card">
+        <div class="city-name" id="city-name">Loading...</div>
+        <div class="aqi-display">
+          <div class="aqi-number" id="aqi-main-number">—</div>
+          <div class="aqi-right">
+            <div class="aqi-badge" id="aqi-main-badge">—</div>
+            <div class="aqi-label">US AQI</div>
+          </div>
+        </div>
+
+        <!-- Colour gradient bar showing where AQI falls -->
+        <div class="aqi-bar-wrap">
+          <div class="aqi-bar">
+            <div class="aqi-bar-fill" id="aqi-bar-fill"></div>
+            <div class="aqi-bar-marker" id="aqi-bar-marker"></div>
+          </div>
+          <div class="aqi-bar-labels">
+            <span>0</span><span>50</span><span>100</span><span>200</span><span>300+</span>
+          </div>
+        </div>
+
+        <div class="health-tip">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+               style="flex-shrink:0;margin-top:1px">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M12 8V12M12 16H12.01"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <span id="health-tip-text">Fetching air quality data...</span>
+        </div>
+      </div>
+
+      <!-- Pollutants Breakdown -->
+      <div class="card">
+        <div class="card-title">Pollutants</div>
+        <div class="pollutants-grid" id="pollutants-grid">
+          <div class="pollutant-skeleton"></div>
+          <div class="pollutant-skeleton"></div>
+          <div class="pollutant-skeleton"></div>
+          <div class="pollutant-skeleton"></div>
+        </div>
+      </div>
+
+      <!-- AQI Legend -->
+      <div class="card">
+        <div class="card-title">AQI Scale</div>
+        <div class="legend-list">
+          <div class="legend-row">
+            <span class="legend-dot" style="background:#00e400"></span>
+            <span class="legend-range">0 – 50</span>
+            <span class="legend-label good">Good</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-dot" style="background:#ffff00"></span>
+            <span class="legend-range">51 – 100</span>
+            <span class="legend-label moderate">Moderate</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-dot" style="background:#ff7e00"></span>
+            <span class="legend-range">101 – 150</span>
+            <span class="legend-label sensitive">Sensitive Groups</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-dot" style="background:#ff0000"></span>
+            <span class="legend-range">151 – 200</span>
+            <span class="legend-label unhealthy">Unhealthy</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-dot" style="background:#8f3f97"></span>
+            <span class="legend-range">201 – 300</span>
+            <span class="legend-label very-unhealthy">Very Unhealthy</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-dot" style="background:#7e0023"></span>
+            <span class="legend-range">301+</span>
+            <span class="legend-label hazardous">Hazardous</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nearby Stations List -->
+      <div class="card">
+        <div class="card-title">Nearby Stations
+          <span class="station-count" id="station-count"></span>
+        </div>
+        <div class="stations-list" id="stations-list">
+          <div class="station-empty">Searching for stations...</div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- MAP -->
+    <div class="map-wrap">
+      <div id="map"></div>
+
+      <!-- Loading overlay -->
+      <div class="map-loading" id="map-loading">
+        <div class="spinner"></div>
+        <div class="spinner-text">Fetching air quality data...</div>
+      </div>
+
+      <!-- Error overlay -->
+      <div class="map-error hidden" id="map-error">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M12 8V12M12 16H12.01"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <p id="error-msg">Something went wrong. Check your API token in config.js.</p>
+        <button onclick="location.reload()">Try again</button>
+      </div>
+
+      <div class="map-hint">Click any marker for details</div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════
+       STATION DETAIL MODAL
+  ═══════════════════════════════════════════ -->
+  <div class="station-modal hidden" id="station-modal">
+    <div class="station-modal-inner">
+      <button class="modal-close" id="modal-close" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <path d="M18 6L6 18M6 6L18 18"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <div class="modal-station-name" id="modal-station-name">Station Name</div>
+      <div class="modal-aqi-row">
+        <div class="modal-aqi-num" id="modal-aqi-num">—</div>
+        <div class="modal-aqi-badge" id="modal-aqi-badge">—</div>
+      </div>
+      <div class="modal-pollutants" id="modal-pollutants"></div>
+      <div class="modal-tip" id="modal-tip"></div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Your project files — order matters -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
