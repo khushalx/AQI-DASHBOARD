@@ -3,9 +3,11 @@
 // ═══════════════════════════════════════
 let map;
 let markersLayer;
-let currentCity = "Ahmedabad";
+let currentCity = "Delhi"; // safer default
 
-// AQI COLORS
+// ═══════════════════════════════════════
+// AQI HELPERS
+// ═══════════════════════════════════════
 function getAQIColor(aqi) {
   if (aqi <= 50) return "#00e400";
   if (aqi <= 100) return "#ffff00";
@@ -18,16 +20,15 @@ function getAQIColor(aqi) {
 function getAQILabel(aqi) {
   if (aqi <= 50) return "Good";
   if (aqi <= 100) return "Moderate";
-  if (aqi <= 150) return "Unhealthy (Sensitive)";
+  if (aqi <= 150) return "Sensitive";
   if (aqi <= 200) return "Unhealthy";
   if (aqi <= 300) return "Very Unhealthy";
   return "Hazardous";
 }
 
-// HEALTH TIP
 function getHealthTip(aqi) {
   if (aqi <= 50) return "Air quality is good. Enjoy outdoor activities.";
-  if (aqi <= 100) return "Acceptable air. Sensitive people should be cautious.";
+  if (aqi <= 100) return "Acceptable air. Sensitive people take care.";
   if (aqi <= 150) return "Limit prolonged outdoor exertion.";
   if (aqi <= 200) return "Avoid outdoor activity if possible.";
   if (aqi <= 300) return "Stay indoors. Wear a mask if outside.";
@@ -38,7 +39,7 @@ function getHealthTip(aqi) {
 // INIT MAP
 // ═══════════════════════════════════════
 function initMap() {
-  map = L.map("map").setView([23.0225, 72.5714], 11);
+  map = L.map("map").setView([28.6139, 77.2090], 11);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors",
@@ -48,7 +49,7 @@ function initMap() {
 }
 
 // ═══════════════════════════════════════
-// FETCH CITY AQI
+// FETCH CITY AQI (SAFE VERSION)
 // ═══════════════════════════════════════
 async function fetchCityAQI(city) {
   try {
@@ -57,22 +58,33 @@ async function fetchCityAQI(city) {
     const res = await fetch(
       `https://api.waqi.info/feed/${city}/?token=${CONFIG.WAQI_TOKEN}`
     );
-    const data = await res.json();
 
-    if (data.status !== "ok") throw new Error("API error");
+    const data = await res.json();
+    console.log("API:", data);
+
+    if (data.status !== "ok" || !data.data) {
+      throw new Error("Invalid API response");
+    }
 
     updateMainUI(data.data);
-    fetchNearbyStations(data.data.city.geo);
+
+    if (data.data.city && data.data.city.geo) {
+      const geo = data.data.city.geo;
+      map.setView(geo, 11);
+      fetchNearbyStations(geo);
+    }
 
     showLoading(false);
+
   } catch (err) {
-    console.error(err);
+    console.error("ERROR:", err);
     showError(true);
+    showLoading(false);
   }
 }
 
 // ═══════════════════════════════════════
-// FETCH NEARBY STATIONS
+// FETCH NEARBY STATIONS (SAFE)
 // ═══════════════════════════════════════
 async function fetchNearbyStations([lat, lon]) {
   try {
@@ -83,6 +95,8 @@ async function fetchNearbyStations([lat, lon]) {
     );
 
     const data = await res.json();
+
+    if (!data.data) return;
 
     const stationsList = document.getElementById("stations-list");
     stationsList.innerHTML = "";
@@ -106,12 +120,12 @@ async function fetchNearbyStations([lat, lon]) {
 
       marker.on("click", () => openModal(station));
 
-      // SIDEBAR LIST
+      // SIDEBAR ITEM
       const div = document.createElement("div");
       div.className = "station-item";
       div.innerHTML = `
         <div style="display:flex;justify-content:space-between">
-          <span>${station.station.name}</span>
+          <span>${station.station.name || "Unknown"}</span>
           <span style="color:${color}">${aqi}</span>
         </div>
       `;
@@ -122,17 +136,19 @@ async function fetchNearbyStations([lat, lon]) {
       `(${data.data.length})`;
 
   } catch (err) {
-    console.error(err);
+    console.error("Stations error:", err);
   }
 }
 
 // ═══════════════════════════════════════
-// UPDATE MAIN UI
+// UPDATE UI (SAFE)
 // ═══════════════════════════════════════
 function updateMainUI(data) {
-  const aqi = data.aqi;
+  const aqi = data.aqi || 0;
 
-  document.getElementById("city-name").innerText = data.city.name;
+  document.getElementById("city-name").innerText =
+    data.city?.name || "Unknown";
+
   document.getElementById("aqi-main-number").innerText = aqi;
 
   const badge = document.getElementById("aqi-main-badge");
@@ -142,7 +158,7 @@ function updateMainUI(data) {
   document.getElementById("health-tip-text").innerText =
     getHealthTip(aqi);
 
-  // AQI BAR MARKER
+  // AQI BAR
   const marker = document.getElementById("aqi-bar-marker");
   const percent = Math.min(aqi / 300, 1) * 100;
   marker.style.left = percent + "%";
@@ -151,8 +167,10 @@ function updateMainUI(data) {
   const grid = document.getElementById("pollutants-grid");
   grid.innerHTML = "";
 
-  if (data.iaqi) {
+  if (data.iaqi && typeof data.iaqi === "object") {
     Object.entries(data.iaqi).forEach(([key, val]) => {
+      if (!val || !val.v) return;
+
       const div = document.createElement("div");
       div.className = "pollutant-box";
       div.innerHTML = `
@@ -171,10 +189,10 @@ function openModal(station) {
   const modal = document.getElementById("station-modal");
   modal.classList.remove("hidden");
 
-  const aqi = Number(station.aqi);
+  const aqi = Number(station.aqi) || 0;
 
   document.getElementById("modal-station-name").innerText =
-    station.station.name;
+    station.station?.name || "Unknown";
 
   document.getElementById("modal-aqi-num").innerText = aqi;
 
@@ -186,7 +204,6 @@ function openModal(station) {
     getHealthTip(aqi);
 }
 
-// CLOSE MODAL
 document.getElementById("modal-close").onclick = () => {
   document.getElementById("station-modal").classList.add("hidden");
 };
@@ -199,7 +216,6 @@ document.getElementById("search-btn").onclick = () => {
   if (city) fetchCityAQI(city);
 };
 
-// ENTER KEY SEARCH
 document.getElementById("city-search").addEventListener("keypress", (e) => {
   if (e.key === "Enter") {
     document.getElementById("search-btn").click();
@@ -207,21 +223,31 @@ document.getElementById("city-search").addEventListener("keypress", (e) => {
 });
 
 // ═══════════════════════════════════════
-// GEOLOCATION
+// GEOLOCATION (SAFE)
 // ═══════════════════════════════════════
 document.getElementById("locate-btn").onclick = () => {
+  if (!navigator.geolocation) return;
+
   navigator.geolocation.getCurrentPosition(async (pos) => {
-    const { latitude, longitude } = pos.coords;
+    try {
+      const { latitude, longitude } = pos.coords;
 
-    map.setView([latitude, longitude], 12);
+      map.setView([latitude, longitude], 12);
 
-    const res = await fetch(
-      `https://api.waqi.info/feed/geo:${latitude};${longitude}/?token=${CONFIG.WAQI_TOKEN}`
-    );
+      const res = await fetch(
+        `https://api.waqi.info/feed/geo:${latitude};${longitude}/?token=${CONFIG.WAQI_TOKEN}`
+      );
 
-    const data = await res.json();
-    updateMainUI(data.data);
-    fetchNearbyStations([latitude, longitude]);
+      const data = await res.json();
+
+      if (data.status !== "ok") return;
+
+      updateMainUI(data.data);
+      fetchNearbyStations([latitude, longitude]);
+
+    } catch (err) {
+      console.error("Geo error:", err);
+    }
   });
 };
 
@@ -238,7 +264,9 @@ function showError(state) {
 }
 
 // ═══════════════════════════════════════
-// INIT
+// INIT (FIXED)
 // ═══════════════════════════════════════
-initMap();
-fetchCityAQI(currentCity);
+window.onload = () => {
+  initMap();
+  fetchCityAQI(currentCity);
+};
